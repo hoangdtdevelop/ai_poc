@@ -1,0 +1,41 @@
+name: AI Controller POC
+
+# Manual scan only. There is deliberately NO schedule/cron trigger.
+# GitHub > ai_poc > Actions > AI Controller POC > Run workflow.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ai-controller-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    name: Scan Project and dispatch AI jobs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      actions: write
+      pull-requests: read
+
+    steps:
+      - name: Checkout automation scripts
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Scan the Project
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PROJECT_TOKEN: ${{ secrets.PROJECT_READ_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          PROJECT_OWNER: hoangdtdevelop
+          PROJECT_TITLE: AI Development POC
+        run: node .github/scripts/ai-controller.mjs
