@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI POC - GitHub Workflow</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #172033; background: #f4f7fb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+    .card { width: min(100%, 520px); background: #fff; padding: 36px; border-radius: 20px; box-shadow: 0 18px 60px rgba(24, 45, 82, .09); }
+    .eyebrow { margin: 0 0 12px; font-weight: 700; font-size: 12px; letter-spacing: .11em; text-transform: uppercase; color: #2377cb; }
+    h1 { margin: 0 0 14px; font-size: clamp(28px, 5vw, 36px); }
+    p { line-height: 1.65; color: #59677b; }
+    button { border: 0; border-radius: 10px; background: #2563eb; color: #fff; font: inherit; font-weight: 650; padding: 12px 20px; cursor: pointer; }
+    button:hover { background: #1d4ed8; }
+    button:focus-visible { outline: 3px solid #93c5fd; outline-offset: 3px; }
+    #message { margin-top: 16px; min-height: 24px; font-weight: 600; color: #147d52; }
+    footer { margin-top: 26px; padding-top: 18px; border-top: 1px solid #e5eaf1; color: #8290a2; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <p class="eyebrow">GitHub + AI Agent</p>
+    <h1>AI POC</h1>
+    <p>Trang HTML mẫu để kiểm thử quy trình: tạo GitHub Issue, AI phân tích yêu cầu, phê duyệt, tự sửa code và tạo Pull Request.</p>
+    <button id="testButton" type="button">Kiểm tra hoạt động</button>
+    <p id="message" role="status" aria-live="polite"></p>
+    <footer>Sample project · HTML / CSS / JavaScript thuần</footer>
+  </main>
+
+  <script>
+    document.getElementById("testButton").addEventListener("click", () => {
+      document.getElementById("message").textContent = "Thành công! JavaScript đang hoạt động.";
+    });
+  </script>
+</body>
+</html>
