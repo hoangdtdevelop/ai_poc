@@ -1,4 +1,5 @@
 name: AI Analysis POC
+run-name: "AI Analysis #${{ inputs.issue_number }}"
 
 # Chạy thủ công từ GitHub Actions -> AI Analysis POC -> Run workflow.
 # Nhập issue_number để chỉ định Issue cần AI phân tích.
@@ -9,9 +10,13 @@ on:
         description: "Issue number in ai_poc (e.g. 1)"
         required: true
         type: string
+      status_updated_at:
+        description: "Controller Status transition key (leave blank for manual run)"
+        required: false
+        type: string
 
 concurrency:
-  group: ai-analysis-${{ github.repository }}-${{ inputs.issue_number }}
+  group: ai-issue-${{ github.repository }}-${{ inputs.issue_number }}
   cancel-in-progress: false
 
 jobs:
@@ -30,6 +35,23 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Prevent duplicate Analysis
+        env:
+          PROJECT_TOKEN: ${{ secrets.PROJECT_READ_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+          PROJECT_OWNER: hoangdtdevelop
+          PROJECT_TITLE: AI Development POC
+          REPOSITORY: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          STATUS_UPDATED_AT: ${{ inputs.status_updated_at }}
+          AI_STAGE: analysis
+        run: node .github/scripts/ai-job-guard.mjs
+
       - name: Load target Issue
         shell: bash
         env:
@@ -46,11 +68,6 @@ jobs:
             --json title,body \
             --jq '.title + "\n\n" + (.body // "")' > issue-request.txt
           test -s issue-request.txt
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "24"
 
       - name: Install GitHub Copilot CLI
         run: npm install -g @github/copilot
@@ -141,6 +158,18 @@ jobs:
               throw new Error('Analysis report is empty');
             }
 
+            const marker = '<!-- ai-poc-analysis-run:' + context.runId + ' -->';
+            const previous = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number,
+              per_page: 100
+            });
+            if (previous.some(c => c.body?.includes(marker))) {
+              core.info('Analysis Report already posted by this workflow run; skipping duplicate comment.');
+              return;
+            }
+
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -151,7 +180,9 @@ jobs:
                 report.slice(0, 58000),
                 '',
                 '---',
-                '*Analysis only. Awaiting human approval before implementation.*'
+                '*Analysis only. Awaiting human approval before implementation.*',
+                '',
+                marker
               ].join('\n')
             });
 
