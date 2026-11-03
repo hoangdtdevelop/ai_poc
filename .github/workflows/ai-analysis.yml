@@ -1,0 +1,104 @@
+name: AI Analysis — OpenHands (manual)
+run-name: "AI Analysis #${{ inputs.issue_number }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Issue number to analyze (in this repository)"
+        required: true
+        type: number
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: ai-analysis-${{ github.repository }}-${{ inputs.issue_number }}
+  cancel-in-progress: false
+
+jobs:
+  analyze:
+    name: Analyze source and comment on Issue
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout repository (without persisted credentials)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate and load Issue
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          [[ "$ISSUE_NUMBER" =~ ^[1-9][0-9]*$ ]] || {
+            echo "::error::Issue number must be a positive integer."
+            exit 1
+          }
+          gh issue view "$ISSUE_NUMBER" --repo "$REPOSITORY" \
+            --json number,title,body,state > "$RUNNER_TEMP/issue-request.json"
+          jq -e --argjson num "$ISSUE_NUMBER" \
+            '.number == $num and .state == "OPEN"' \
+            "$RUNNER_TEMP/issue-request.json" > /dev/null
+
+      - name: Install matching OpenHands SDK and tools
+        run: python -m pip install "openhands-sdk==1.58.2" "openhands-tools==1.58.2"
+
+      - name: Run OpenHands AI Analysis
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          ISSUE_JSON_PATH: ${{ runner.temp }}/issue-request.json
+          ANALYSIS_OUTPUT_PATH: ${{ runner.temp }}/analysis-report.md
+          SOURCE_REVISION: ${{ github.sha }}
+        run: |
+          test -n "$OPENROUTER_API_KEY" || {
+            echo "::error::Missing OPENROUTER_API_KEY repository secret."
+            exit 1
+          }
+          python .github/scripts/run_openhands_analysis.py
+
+      - name: Upload analysis report for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-analysis-issue-${{ inputs.issue_number }}
+          path: ${{ runner.temp }}/analysis-report.md
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Comment report on Issue
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          {
+            printf '## AI Analysis — OpenHands (POC)\n\n'
+            cat "$RUNNER_TEMP/analysis-report.md"
+            printf '\n\n---\n'
+            printf 'Analysis only — waiting for human approval. No source changes were published.\n'
+            printf '<!-- ai-analysis-run:%s -->\n' "$GITHUB_RUN_ID"
+          } > "$RUNNER_TEMP/issue-comment.md"
+
+          # Rerunning the same workflow run should not duplicate the comment.
+          marker="<!-- ai-analysis-run:$GITHUB_RUN_ID -->"
+          if gh issue view "$ISSUE_NUMBER" --repo "$REPOSITORY" --json comments \
+             --jq '.comments[].body' | grep -Fq "$marker"; then
+            echo "This workflow run already commented on the Issue."
+          else
+            gh issue comment "$ISSUE_NUMBER" --repo "$REPOSITORY" \
+              --body-file "$RUNNER_TEMP/issue-comment.md"
+          fi

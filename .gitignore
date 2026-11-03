@@ -1,0 +1,11 @@
+# Never add local API credentials or temporary AI outputs.
+openrouter.txt
+.env
+.env.*
+*.pem
+*.p12
+*.pfx
+*.key
+__pycache__/
+*.pyc
+analysis-report.md
